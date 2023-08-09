@@ -130,7 +130,7 @@ impl State {
             camera_pos: (0.0, 0.0, 3.0).into(),
             camera_front: (0.0, 0.0, -1.0).into(),
             speed: 5.0,
-            angular_speed: 1.0,
+            angular_speed: 2.0,
             yaw: -45.0,
             pitch: 0.0,
         };
@@ -235,7 +235,11 @@ impl State {
         });
         let index_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Index Buffer"),
-            size: chunk::U32_SIZE * 24 * chunk::CHUNK_WIDTH * chunk::CHUNK_DEPTH * chunk::CHUNK_HEIGHT,
+            size: chunk::U32_SIZE
+                * 36
+                * chunk::CHUNK_WIDTH
+                * chunk::CHUNK_DEPTH
+                * chunk::CHUNK_HEIGHT,
             usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -303,7 +307,7 @@ impl State {
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("Render Encoder"),
-        });
+            });
 
         let (stg_vertex, stg_index, num_indices) = self.chunk.build(&self.device);
         stg_vertex.copy_to_buffer(&mut encoder, &self.vertex_buffer);
