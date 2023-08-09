@@ -121,6 +121,7 @@ struct State {
     index_buffer: wgpu::Buffer,
     num_indices: u32,
     camera: camera::Camera,
+    camera_controller: camera::CameraController,
     projection: camera::Projection,
     camera_uniform: CameraUniform,
     camera_buffer: wgpu::Buffer,
@@ -197,13 +198,11 @@ impl State {
             camera_pos: (0.0, 0.0, 3.0).into(),
             camera_front: (0.0, 0.0, -1.0).into(),
             speed: 5.0,
-            is_forward_pressed: false,
-            is_backward_pressed: false,
-            is_right_pressed: false,
-            is_left_pressed: false,
-            is_up_pressed: false,
-            is_down_pressed: false,
+            angular_speed: 1.0,
+            yaw: -45.0,
+            pitch: 0.0,
         };
+        let camera_controller = camera::CameraController::new();
         let projection = camera::Projection::new(config.width as f32 / config.height as f32, 45.0, 0.1, 100.0);
 
         let mut camera_uniform = CameraUniform::new();
@@ -318,6 +317,7 @@ impl State {
             index_buffer,
             num_indices,
             camera,
+            camera_controller,
             camera_buffer,
             projection,
             camera_bind_group,
@@ -342,11 +342,11 @@ impl State {
     }
 
     fn input(&mut self, event: &WindowEvent) -> bool {
-        self.camera.process_events(event)
+        self.camera_controller.process_events(event)
     }
 
     fn update(&mut self, dt: instant::Duration) {
-        self.camera.update_camera(dt);
+        self.camera.update_camera(&self.camera_controller, dt);
         self.camera_uniform.update_view_proj(&self.camera, &self.projection);
         self.queue.write_buffer(
             &self.camera_buffer,
