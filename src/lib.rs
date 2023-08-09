@@ -235,11 +235,7 @@ impl State {
         });
         let index_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Index Buffer"),
-            size: chunk::U32_SIZE
-                * 36
-                * chunk::CHUNK_WIDTH
-                * chunk::CHUNK_DEPTH
-                * chunk::CHUNK_HEIGHT,
+            size: chunk::U32_SIZE * chunk::MAX_INDEX_COUNT_PER_CHUNK,
             usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -335,7 +331,7 @@ impl State {
             render_pass.set_pipeline(&self.render_pipeline);
             render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-            render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+            render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
             render_pass.draw_indexed(0..num_indices, 0, 0..1);
         }
 

@@ -8,6 +8,7 @@ const BLOCK_COLOR: [f32; 3] = [0.3, 1.0, 0.5];
 
 pub const VERTEX_PER_VOXEL: u64 = 36;
 pub const MAX_VERTEX_PER_CHUNK: u64 = VERTEX_PER_VOXEL * CHUNK_WIDTH * CHUNK_HEIGHT * CHUNK_DEPTH;
+pub const MAX_INDEX_COUNT_PER_CHUNK: u64 = MAX_VERTEX_PER_CHUNK;
 
 pub struct ChunkData {
     vertices: Vec<Vertex>,
@@ -24,7 +25,6 @@ impl ChunkData {
         }
     }
     pub fn generate_mesh(&mut self) {
-        
         for x in 0..CHUNK_WIDTH{
             for z in 0..CHUNK_DEPTH{
                 for y in 0..CHUNK_HEIGHT{
@@ -39,16 +39,6 @@ impl ChunkData {
                 }
             }
         }
-        /*
-        let (vertices, indices) = generate_voxel(x as f32, y as f32, z as f32, self.num_of_voxels);
-        self.num_of_voxels += 1;
-        for vertex in vertices.iter() {
-            self.vertices.push(*vertex);
-        }
-        for index in indices.iter() {
-            self.indices.push(*index);
-        }
-        */
     }
 
     pub fn build(&mut self, device: &wgpu::Device) -> (StagingBuffer, StagingBuffer, u32) {
@@ -194,11 +184,13 @@ fn generate_voxel(x: f32, y: f32, z: f32, voxel_count: u32) -> ([Vertex; 24], [u
             color: [0.3, 1.0, 0.5],
         },
     ];
+
     let mut indices: [u32; 36] = [
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         0, 0, 0, 0, 0, 0,
     ];
     let offset = voxel_count * 24;
+
     for i in 0..6 {
         indices[i * 6 + 0] = offset + 2 + (i * 4) as u32;
         indices[i * 6 + 1] = offset + 1 + (i * 4) as u32;
@@ -207,6 +199,7 @@ fn generate_voxel(x: f32, y: f32, z: f32, voxel_count: u32) -> ([Vertex; 24], [u
         indices[i * 6 + 4] = offset + 0 + (i * 4) as u32;
         indices[i * 6 + 5] = offset + 1 + (i * 4) as u32;
     }
+    
     (vertices, indices)
 }
 
