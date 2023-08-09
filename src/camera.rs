@@ -9,6 +9,8 @@ pub struct Camera{
     pub is_backward_pressed: bool,
     pub is_right_pressed: bool,
     pub is_left_pressed: bool,
+    pub is_up_pressed: bool,
+    pub is_down_pressed: bool,
 }
 
 impl Camera {
@@ -45,6 +47,14 @@ impl Camera {
                         self.is_right_pressed = is_pressed;
                         true
                     }
+                    VirtualKeyCode::Space => {
+                        self.is_up_pressed = is_pressed;
+                        true
+                    }
+                    VirtualKeyCode::LControl => {
+                        self.is_down_pressed = is_pressed;
+                        true
+                    }
                     _ => false,
                 }
             }
@@ -52,20 +62,30 @@ impl Camera {
         }
     }    
     
-    pub fn update_camera(&mut self) {
+    pub fn update_camera(&mut self, dt: instant::Duration) {
+        let dt = dt.as_secs_f32();
         if self.is_forward_pressed{
-            self.camera_pos += self.camera_front * self.speed;
+            self.camera_pos += self.camera_front * self.speed * dt;
         }
         if self.is_backward_pressed{
-            self.camera_pos -= self.camera_front * self.speed;
+            self.camera_pos -= self.camera_front * self.speed * dt;
         }
+        
         use cgmath::InnerSpace;
         let right = self.camera_front.cross((0.0, 1.0, 0.0).into()).normalize();
         if self.is_right_pressed{
-            self.camera_pos += right * self.speed;
+            self.camera_pos += right * self.speed * dt;
         }
         if self.is_left_pressed{
-            self.camera_pos -= right * self.speed;
+            self.camera_pos -= right * self.speed * dt;
+        }
+        
+        let camera_up = right.cross(self.camera_front);
+        if self.is_up_pressed{
+            self.camera_pos += camera_up * self.speed * dt;
+        }
+        if self.is_down_pressed{
+            self.camera_pos -= camera_up * self.speed * dt;
         }
     }
 }

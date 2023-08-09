@@ -8,7 +8,6 @@ use winit::{
 };
 
 mod camera;
-mod utils;
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
@@ -197,11 +196,13 @@ impl State {
         let camera = camera::Camera{
             camera_pos: (0.0, 0.0, 3.0).into(),
             camera_front: (0.0, 0.0, -1.0).into(),
-            speed: 0.5,
+            speed: 5.0,
             is_forward_pressed: false,
             is_backward_pressed: false,
             is_right_pressed: false,
             is_left_pressed: false,
+            is_up_pressed: false,
+            is_down_pressed: false,
         };
         let projection = camera::Projection::new(config.width as f32 / config.height as f32, 45.0, 0.1, 100.0);
 
@@ -344,8 +345,8 @@ impl State {
         self.camera.process_events(event)
     }
 
-    fn update(&mut self) {
-        self.camera.update_camera();
+    fn update(&mut self, dt: instant::Duration) {
+        self.camera.update_camera(dt);
         self.camera_uniform.update_view_proj(&self.camera, &self.projection);
         self.queue.write_buffer(
             &self.camera_buffer,
@@ -434,6 +435,7 @@ pub async fn run() {
 
     // State::new uses async code, so we're going to wait for it to finish
     let mut state = State::new(window).await;
+    let mut last_render_time = instant::Instant::now();
 
     event_loop.run(move |event, _, control_flow| {
         match event {
@@ -465,7 +467,10 @@ pub async fn run() {
                 }
             }
             Event::RedrawRequested(window_id) if window_id == state.window().id() => {
-                state.update();
+                let now = instant::Instant::now();
+                let dt = now - last_render_time;
+                last_render_time = now;
+                state.update(dt);
                 match state.render() {
                     Ok(_) => {}
                     // Reconfigure the surface if it's lost or outdated
