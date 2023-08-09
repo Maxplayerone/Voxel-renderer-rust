@@ -8,79 +8,10 @@ use winit::{
 };
 
 mod camera;
+mod chunk;
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
-
-#[repr(C)]
-#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-struct Vertex {
-    position: [f32; 3],
-    color: [f32; 3],
-}
-
-impl Vertex {
-    fn desc() -> wgpu::VertexBufferLayout<'static> {
-        use std::mem;
-        wgpu::VertexBufferLayout {
-            array_stride: mem::size_of::<Vertex>() as wgpu::BufferAddress,
-            step_mode: wgpu::VertexStepMode::Vertex,
-            attributes: &[
-                wgpu::VertexAttribute {
-                    offset: 0,
-                    shader_location: 0,
-                    format: wgpu::VertexFormat::Float32x3,
-                },
-                wgpu::VertexAttribute {
-                    offset: mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
-                    shader_location: 1,
-                    format: wgpu::VertexFormat::Float32x3,
-                },
-            ],
-        }
-    }
-}
-
-const VERTICES: &[Vertex] = &[
-    //front
-    Vertex {
-        position: [0.0, 0.0, 1.0],
-        color: [0.3, 1.0, 0.5],
-    },
-    Vertex {
-        position: [1.0, 0.0, 1.0],
-        color: [0.3, 1.0, 0.5],
-    },
-    Vertex {
-        position: [0.0, 1.0, 1.0],
-        color: [0.3, 1.0, 0.5],
-    },
-    Vertex {
-        position: [1.0, 1.0, 1.0],
-        color: [0.3, 1.0, 0.5],
-    },
-    //back
-    Vertex {
-        position: [0.0, 0.0, 0.0],
-        color: [0.3, 1.0, 0.5],
-    },
-    Vertex {
-        position: [1.0, 0.0, 0.0],
-        color: [0.3, 1.0, 0.5],
-    },
-    Vertex {
-        position: [0.0, 1.0, 0.0],
-        color: [0.3, 1.0, 0.5],
-    },
-    Vertex {
-        position: [1.0, 1.0, 0.0],
-        color: [0.3, 1.0, 0.5],
-    },
-];
-
-const INDICES: &[u16] = &[2, 0, 1, 2, 1, 3,
-                            6, 4, 5, 6, 5, 7,
-];
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
@@ -106,7 +37,8 @@ impl CameraUniform {
     }
 
     fn update_view_proj(&mut self, camera: &camera::Camera, projection: &camera::Projection) {
-        self.view_proj = (OPENGL_TO_WGPU_MATRIX * projection.get_projection() * camera.get_view()).into();
+        self.view_proj =
+            (OPENGL_TO_WGPU_MATRIX * projection.get_projection() * camera.get_view()).into();
     }
 }
 
@@ -119,7 +51,7 @@ struct State {
     render_pipeline: wgpu::RenderPipeline,
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
-    num_indices: u32,
+    chunk: chunk::ChunkData,
     camera: camera::Camera,
     camera_controller: camera::CameraController,
     projection: camera::Projection,
@@ -194,7 +126,7 @@ impl State {
         surface.configure(&device, &config);
 
         //positive Z points away from the screen
-        let camera = camera::Camera{
+        let camera = camera::Camera {
             camera_pos: (0.0, 0.0, 3.0).into(),
             camera_front: (0.0, 0.0, -1.0).into(),
             speed: 5.0,
@@ -203,7 +135,8 @@ impl State {
             pitch: 0.0,
         };
         let camera_controller = camera::CameraController::new();
-        let projection = camera::Projection::new(config.width as f32 / config.height as f32, 45.0, 0.1, 100.0);
+        let projection =
+            camera::Projection::new(config.width as f32 / config.height as f32, 45.0, 0.1, 100.0);
 
         let mut camera_uniform = CameraUniform::new();
         camera_uniform.update_view_proj(&camera, &projection);
@@ -256,7 +189,7 @@ impl State {
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: "vs_main",
-                buffers: &[Vertex::desc()],
+                buffers: &[chunk::Vertex::desc()],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
@@ -274,7 +207,7 @@ impl State {
                 topology: wgpu::PrimitiveTopology::TriangleList,
                 strip_index_format: None,
                 front_face: wgpu::FrontFace::Ccw,
-                cull_mode: None,//Some(wgpu::Face::Back),
+                cull_mode: Some(wgpu::Face::Back),
                 // Setting this to anything other than Fill requires Features::POLYGON_MODE_LINE
                 // or Features::POLYGON_MODE_POINT
                 polygon_mode: wgpu::PolygonMode::Fill,
@@ -294,18 +227,22 @@ impl State {
             multiview: None,
         });
 
-        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        let vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Vertex Buffer"),
-            contents: bytemuck::cast_slice(VERTICES),
-            usage: wgpu::BufferUsages::VERTEX,
+            size: chunk::Vertex::size() * chunk::MAX_VERTEX_PER_CHUNK,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
         });
-        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        let index_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Index Buffer"),
-            contents: bytemuck::cast_slice(INDICES),
-            usage: wgpu::BufferUsages::INDEX,
+            size: chunk::U32_SIZE * 24 * chunk::CHUNK_WIDTH * chunk::CHUNK_DEPTH * chunk::CHUNK_HEIGHT,
+            usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
         });
-        let num_indices = INDICES.len() as u32;
-        
+
+        let mut chunk = chunk::ChunkData::new();
+        chunk.generate_mesh();
+
         Self {
             surface,
             device,
@@ -315,8 +252,8 @@ impl State {
             render_pipeline,
             vertex_buffer,
             index_buffer,
-            num_indices,
             camera,
+            chunk,
             camera_controller,
             camera_buffer,
             projection,
@@ -347,7 +284,8 @@ impl State {
 
     fn update(&mut self, dt: instant::Duration) {
         self.camera.update_camera(&self.camera_controller, dt);
-        self.camera_uniform.update_view_proj(&self.camera, &self.projection);
+        self.camera_uniform
+            .update_view_proj(&self.camera, &self.projection);
         self.queue.write_buffer(
             &self.camera_buffer,
             0,
@@ -365,7 +303,11 @@ impl State {
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("Render Encoder"),
-            });
+        });
+
+        let (stg_vertex, stg_index, num_indices) = self.chunk.build(&self.device);
+        stg_vertex.copy_to_buffer(&mut encoder, &self.vertex_buffer);
+        stg_index.copy_to_buffer(&mut encoder, &self.index_buffer);
 
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -390,7 +332,7 @@ impl State {
             render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-            render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
+            render_pass.draw_indexed(0..num_indices, 0, 0..1);
         }
 
         self.queue.submit(iter::once(encoder.finish()));
