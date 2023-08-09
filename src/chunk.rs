@@ -25,15 +25,16 @@ impl ChunkData {
         }
     }
     pub fn generate_mesh(&mut self) {
-        for x in 0..CHUNK_WIDTH{
-            for z in 0..CHUNK_DEPTH{
-                for y in 0..CHUNK_HEIGHT{
-                    let (vertices, indices) = generate_voxel(x as f32, y as f32, z as f32, self.num_of_voxels);
+        for x in 0..CHUNK_WIDTH {
+            for z in 0..CHUNK_DEPTH {
+                for y in 0..CHUNK_HEIGHT {
+                    let (vertices, indices) =
+                        generate_voxel(x as f32, y as f32, z as f32, self.num_of_voxels);
                     self.num_of_voxels += 1;
-                    for vertex in vertices.iter(){
+                    for vertex in vertices.iter() {
                         self.vertices.push(*vertex);
                     }
-                    for index in indices.iter(){
+                    for index in indices.iter() {
                         self.indices.push(*index);
                     }
                 }
@@ -199,7 +200,7 @@ fn generate_voxel(x: f32, y: f32, z: f32, voxel_count: u32) -> ([Vertex; 24], [u
         indices[i * 6 + 4] = offset + 0 + (i * 4) as u32;
         indices[i * 6 + 5] = offset + 1 + (i * 4) as u32;
     }
-    
+
     (vertices, indices)
 }
 
