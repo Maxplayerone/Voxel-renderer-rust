@@ -1,45 +1,96 @@
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 
-pub const CHUNK_WIDTH: u64 = 16;
-pub const CHUNK_DEPTH: u64 = 16;
-pub const CHUNK_HEIGHT: u64 = 16;
+pub const CHUNK_WIDTH: usize = 4;
+pub const CHUNK_DEPTH: usize = 4;
+pub const CHUNK_HEIGHT: usize = 4;
 const BLOCK_SIZE: f32 = 1.0;
-const BLOCK_COLOR: [f32; 3] = [0.3, 1.0, 0.5];
 
-pub const VERTEX_PER_VOXEL: u64 = 36;
-pub const MAX_VERTEX_PER_CHUNK: u64 = VERTEX_PER_VOXEL * CHUNK_WIDTH * CHUNK_HEIGHT * CHUNK_DEPTH;
-pub const MAX_INDEX_COUNT_PER_CHUNK: u64 = MAX_VERTEX_PER_CHUNK;
+const FRONT_COLOR: [f32; 3] = [0.4, 1.0, 0.52];
+const BACK_COLOR: [f32; 3] = [0.4, 1.0, 1.0];
+const RIGHT_COLOR: [f32; 3] = [1.0, 0.53, 0.43]; //orang
+const LEFT_COLOR: [f32; 3] = [0.82, 0.32, 1.0];
+const TOP_COLOR: [f32; 3] = [1.0, 1.0, 1.0];
+const BOTTOM_COLOR: [f32; 3] = [0.0, 0.0, 0.0];
+
+pub const MAX_VOXEL_COUNT_PER_CHUNK: usize = CHUNK_WIDTH * CHUNK_HEIGHT * CHUNK_DEPTH;
+pub const VERTEX_PER_VOXEL: usize = 36;
+pub const MAX_VERTEX_PER_CHUNK: usize = VERTEX_PER_VOXEL * MAX_VOXEL_COUNT_PER_CHUNK;
+pub const MAX_INDEX_COUNT_PER_CHUNK: usize = MAX_VERTEX_PER_CHUNK;
 
 pub struct ChunkMeshData {
     vertices: Vec<Vertex>,
     indices: Vec<u32>,
-    num_of_voxels: u32,
+    num_of_faces: u32,
+    chunk_data: Vec<u8>,
+}
+
+//might be wrong (oopsies)
+fn to_1d_array(x: usize, y: usize, z: usize) -> usize {
+    y + x * CHUNK_HEIGHT + (z * CHUNK_WIDTH * CHUNK_HEIGHT)
 }
 
 impl ChunkMeshData {
     pub fn new() -> Self {
+        let chunk_data = vec![0; MAX_VOXEL_COUNT_PER_CHUNK];
         Self {
             vertices: Vec::new(),
             indices: Vec::new(),
-            num_of_voxels: 0,
+            num_of_faces: 0,
+            chunk_data,
         }
     }
+
+    fn generate_mesh_face_data(&mut self, x: usize, y: usize, z: usize, face_type: FaceType) {
+        let vertex_face = generate_voxel_face(x as f32, y as f32, z as f32, face_type);
+        for vertex in vertex_face.iter() {
+            self.vertices.push(*vertex);
+        }
+        let indices = generate_index_for_face(self.num_of_faces);
+        for index in indices.iter() {
+            self.indices.push(*index);
+        }
+        self.num_of_faces += 1;
+    }
+
     pub fn generate_mesh(&mut self) {
-        for x in 0..CHUNK_WIDTH {
-            for z in 0..CHUNK_DEPTH {
+        //generating at which position there is a voxel
+        for z in 0..CHUNK_WIDTH {
+            for x in 0..CHUNK_DEPTH {
                 for y in 0..CHUNK_HEIGHT {
-                    let (vertices, indices) =
-                        generate_voxel(x as f32, y as f32, z as f32, self.num_of_voxels);
-                    self.num_of_voxels += 1;
-                    for vertex in vertices.iter() {
-                        self.vertices.push(*vertex);
+                    //println!("index {}", to_1d_array(x, z, y));
+                    self.chunk_data[to_1d_array(x, y, z)] = 1;
+                }
+            }
+        }
+
+        //generating mesh data for visible faces
+        for z in 0..CHUNK_DEPTH {
+            for x in 0..CHUNK_WIDTH {
+                for y in 0..CHUNK_HEIGHT {
+                    //println!("x {} y {} z {}", x, y, z);
+                    //println!("{}", to_1d_array(x + 1, y, z));
+                    if z == CHUNK_DEPTH - 1 || self.chunk_data[to_1d_array(x, y, z + 1)] != 1{
+                        self.generate_mesh_face_data(x, y, z, FaceType::Front);
                     }
-                    for index in indices.iter() {
-                        self.indices.push(*index);
+                    if z == 0 || self.chunk_data[to_1d_array(x, y, z - 1)] != 1{
+                        self.generate_mesh_face_data(x, y, z, FaceType::Back);
+                    }
+                    if x == CHUNK_WIDTH - 1 || self.chunk_data[to_1d_array(x + 1, y, z)] != 1{
+                        self.generate_mesh_face_data(x, y, z, FaceType::Right);
+                    }
+                    if x == 0 || self.chunk_data[to_1d_array(x - 1, y, z)] != 1{
+                        self.generate_mesh_face_data(x, y, z, FaceType::Left);
+                    }
+                    if y == CHUNK_HEIGHT - 1 || self.chunk_data[to_1d_array(x, y + 1, z)] != 1{
+                        self.generate_mesh_face_data(x, y, z, FaceType::Top);
+                    }
+                    if y == 0 || self.chunk_data[to_1d_array(x, y - 1, z)] != 1{
+                        self.generate_mesh_face_data(x, y, z, FaceType::Bottom);
                     }
                 }
             }
         }
+        println!("Number of faces {}", self.num_of_faces);
     }
 
     pub fn build(&mut self, device: &wgpu::Device) -> (StagingBuffer, StagingBuffer, u32) {
@@ -81,127 +132,144 @@ impl StagingBuffer {
     }
 }
 
-fn generate_voxel(x: f32, y: f32, z: f32, voxel_count: u32) -> ([Vertex; 24], [u32; 36]) {
-    let vertices: [Vertex; 24] = [
-        Vertex {
-            position: [x, y, z + BLOCK_SIZE],
-            color: BLOCK_COLOR,
-        },
-        Vertex {
-            position: [x + BLOCK_SIZE, y, z + BLOCK_SIZE],
-            color: [0.3, 1.0, 0.5],
-        },
-        Vertex {
-            position: [x, y + BLOCK_SIZE, z + BLOCK_SIZE],
-            color: [0.3, 1.0, 0.5],
-        },
-        Vertex {
-            position: [x + BLOCK_SIZE, y + BLOCK_SIZE, z + BLOCK_SIZE],
-            color: [0.3, 1.0, 0.5],
-        },
-        //back
-        Vertex {
-            position: [x + BLOCK_SIZE, y, z],
-            color: [0.3, 1.0, 0.5],
-        },
-        Vertex {
-            position: [x, y, z],
-            color: [0.3, 1.0, 0.5],
-        },
-        Vertex {
-            position: [x + BLOCK_SIZE, y + BLOCK_SIZE, z],
-            color: [0.3, 1.0, 0.5],
-        },
-        Vertex {
-            position: [x, y + BLOCK_SIZE, z],
-            color: [0.3, 1.0, 0.5],
-        },
-        //right
-        Vertex {
-            position: [x + BLOCK_SIZE, y, z + BLOCK_SIZE],
-            color: [0.3, 1.0, 0.5],
-        },
-        Vertex {
-            position: [x + BLOCK_SIZE, y, z],
-            color: [0.3, 1.0, 0.5],
-        },
-        Vertex {
-            position: [x + BLOCK_SIZE, y + BLOCK_SIZE, z + BLOCK_SIZE],
-            color: [0.3, 1.0, 0.5],
-        },
-        Vertex {
-            position: [x + BLOCK_SIZE, y + BLOCK_SIZE, z],
-            color: [0.3, 1.0, 0.5],
-        },
-        //left
-        Vertex {
-            position: [x, y, z],
-            color: [0.3, 1.0, 0.5],
-        },
-        Vertex {
-            position: [x, y, z + BLOCK_SIZE],
-            color: [0.3, 1.0, 0.5],
-        },
-        Vertex {
-            position: [x, y + BLOCK_SIZE, z],
-            color: [0.3, 1.0, 0.5],
-        },
-        Vertex {
-            position: [x, y + BLOCK_SIZE, z + BLOCK_SIZE],
-            color: [0.3, 1.0, 0.5],
-        },
-        //bottom
-        Vertex {
-            position: [x, y, z],
-            color: [0.3, 1.0, 0.5],
-        },
-        Vertex {
-            position: [x + BLOCK_SIZE, y, z],
-            color: [0.3, 1.0, 0.5],
-        },
-        Vertex {
-            position: [x, y, z + BLOCK_SIZE],
-            color: [0.3, 1.0, 0.5],
-        },
-        Vertex {
-            position: [x + BLOCK_SIZE, y, z + BLOCK_SIZE],
-            color: [0.3, 1.0, 0.5],
-        },
-        //top
-        Vertex {
-            position: [x, y + BLOCK_SIZE, z + BLOCK_SIZE],
-            color: [0.3, 1.0, 0.5],
-        },
-        Vertex {
-            position: [x + BLOCK_SIZE, y + BLOCK_SIZE, z + BLOCK_SIZE],
-            color: [0.3, 1.0, 0.5],
-        },
-        Vertex {
-            position: [x, y + BLOCK_SIZE, z],
-            color: [0.3, 1.0, 0.5],
-        },
-        Vertex {
-            position: [x + BLOCK_SIZE, y + BLOCK_SIZE, z],
-            color: [0.3, 1.0, 0.5],
-        },
-    ];
+fn generate_index_for_face(face_count: u32) -> [u32; 6] {
+    let offset = face_count * 4;
+    let v1 = offset + 0;
+    let v2 = offset + 1;
+    let v3 = offset + 3;
+    let v4 = offset + 3;
+    let v5 = offset + 2;
+    let v6 = offset + 0;
 
-    let mut indices: [u32; 36] = [
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0,
-    ];
-    let offset = voxel_count * 24;
+    [v1, v2, v3, v4, v5, v6]
+}
 
-    for i in 0..6 {
-        indices[i * 6 + 0] = offset + 2 + (i * 4) as u32;
-        indices[i * 6 + 1] = offset + 1 + (i * 4) as u32;
-        indices[i * 6 + 2] = offset + 3 + (i * 4) as u32;
-        indices[i * 6 + 3] = offset + 2 + (i * 4) as u32;
-        indices[i * 6 + 4] = offset + 0 + (i * 4) as u32;
-        indices[i * 6 + 5] = offset + 1 + (i * 4) as u32;
+enum FaceType {
+    Front,
+    Back,
+    Right,
+    Left,
+    Top,
+    Bottom,
+}
+
+fn generate_voxel_face(x: f32, y: f32, z: f32, face_type: FaceType) -> [Vertex; 4] {
+    match face_type {
+        FaceType::Front => {
+            let v1 = Vertex {
+                position: [x, y, z + BLOCK_SIZE],
+                color: FRONT_COLOR,
+            };
+            let v2 = Vertex {
+                position: [x + BLOCK_SIZE, y, z + BLOCK_SIZE],
+                color: FRONT_COLOR,
+            };
+            let v3 = Vertex {
+                position: [x, y + BLOCK_SIZE, z + BLOCK_SIZE],
+                color: FRONT_COLOR,
+            };
+            let v4 = Vertex {
+                position: [x + BLOCK_SIZE, y + BLOCK_SIZE, z + BLOCK_SIZE],
+                color: FRONT_COLOR,
+            };
+            [v1, v2, v3, v4]
+        }
+        FaceType::Back => {
+            let v1 = Vertex {
+                position: [x + BLOCK_SIZE, y, z],
+                color: BACK_COLOR,
+            };
+            let v2 = Vertex {
+                position: [x, y, z],
+                color: BACK_COLOR,
+            };
+            let v3 = Vertex {
+                position: [x + BLOCK_SIZE, y + BLOCK_SIZE, z],
+                color: BACK_COLOR,
+            };
+            let v4 = Vertex {
+                position: [x, y + BLOCK_SIZE, z],
+                color: BACK_COLOR,
+            };
+            [v1, v2, v3, v4]
+        }
+        FaceType::Right => {
+            let v1 = Vertex {
+                position: [x + BLOCK_SIZE, y, z + BLOCK_SIZE],
+                color: RIGHT_COLOR,
+            };
+            let v2 = Vertex {
+                position: [x + BLOCK_SIZE, y, z],
+                color: RIGHT_COLOR,
+            };
+            let v3 = Vertex {
+                position: [x + BLOCK_SIZE, y + BLOCK_SIZE, z + BLOCK_SIZE],
+                color: RIGHT_COLOR,
+            };
+            let v4 = Vertex {
+                position: [x + BLOCK_SIZE, y + BLOCK_SIZE, z],
+                color: RIGHT_COLOR,
+            };
+            [v1, v2, v3, v4]
+        }
+        FaceType::Left => {
+            let v1 = Vertex {
+                position: [x, y, z],
+                color: LEFT_COLOR,
+            };
+            let v2 = Vertex {
+                position: [x, y, z + BLOCK_SIZE],
+                color: LEFT_COLOR,
+            };
+            let v3 = Vertex {
+                position: [x, y + BLOCK_SIZE, z],
+                color: LEFT_COLOR,
+            };
+            let v4 = Vertex {
+                position: [x, y + BLOCK_SIZE, z + BLOCK_SIZE],
+                color: LEFT_COLOR,
+            };
+            [v1, v2, v3, v4]
+        }
+        FaceType::Bottom => {
+            let v1 = Vertex {
+                position: [x, y, z],
+                color: BOTTOM_COLOR,
+            };
+            let v2 = Vertex {
+                position: [x + BLOCK_SIZE, y, z],
+                color: BOTTOM_COLOR,
+            };
+            let v3 = Vertex {
+                position: [x, y, z + BLOCK_SIZE],
+                color: BOTTOM_COLOR,
+            };
+            let v4 = Vertex {
+                position: [x + BLOCK_SIZE, y, z + BLOCK_SIZE],
+                color: BOTTOM_COLOR,
+            };
+            [v1, v2, v3, v4]
+        }
+        FaceType::Top => {
+            let v1 = Vertex {
+                position: [x, y + BLOCK_SIZE, z + BLOCK_SIZE],
+                color: TOP_COLOR,
+            };
+            let v2 = Vertex {
+                position: [x + BLOCK_SIZE, y + BLOCK_SIZE, z + BLOCK_SIZE],
+                color: TOP_COLOR,
+            };
+            let v3 = Vertex {
+                position: [x, y + BLOCK_SIZE, z],
+                color: TOP_COLOR,
+            };
+            let v4 = Vertex {
+                position: [x + BLOCK_SIZE, y + BLOCK_SIZE, z],
+                color: TOP_COLOR,
+            };
+            [v1, v2, v3, v4]
+        }
     }
-
-    (vertices, indices)
 }
 
 fn size_of_slice<T: Sized>(slice: &[T]) -> usize {

@@ -147,13 +147,13 @@ impl Render {
 
         let vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Vertex Buffer"),
-            size: chunk::Vertex::size() * chunk::MAX_VERTEX_PER_CHUNK,
+            size: chunk::Vertex::size() * chunk::MAX_VERTEX_PER_CHUNK as u64,
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
         let index_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Index Buffer"),
-            size: chunk::U32_SIZE * chunk::MAX_INDEX_COUNT_PER_CHUNK,
+            size: chunk::U32_SIZE * chunk::MAX_INDEX_COUNT_PER_CHUNK as u64,
             usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -219,11 +219,11 @@ impl Render {
                     },
                 ..
             } => {
-                let is_pressed = *state == ElementState::Pressed;
+                let _is_pressed = *state == ElementState::Pressed;
                 match keycode {
                     VirtualKeyCode::Key1 => {
-                        let camera_bind_group_layout =
-                            self.device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                        let camera_bind_group_layout = self.device.create_bind_group_layout(
+                            &wgpu::BindGroupLayoutDescriptor {
                                 entries: &[wgpu::BindGroupLayoutEntry {
                                     binding: 0,
                                     visibility: wgpu::ShaderStages::VERTEX,
@@ -235,13 +235,15 @@ impl Render {
                                     count: None,
                                 }],
                                 label: Some("camera_bind_group_layout"),
-                            });
+                            },
+                        );
                         let render_pipeline_layout =
-                            self.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                                label: Some("Render Pipeline Layout"),
-                                bind_group_layouts: &[&camera_bind_group_layout],
-                                push_constant_ranges: &[],
-                            });
+                            self.device
+                                .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                                    label: Some("Render Pipeline Layout"),
+                                    bind_group_layouts: &[&camera_bind_group_layout],
+                                    push_constant_ranges: &[],
+                                });
                         let shader = wgpu::ShaderModuleDescriptor {
                             label: Some("Shader"),
                             source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
@@ -257,8 +259,8 @@ impl Render {
                         true
                     }
                     VirtualKeyCode::Key2 => {
-                        let camera_bind_group_layout =
-                            self.device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                        let camera_bind_group_layout = self.device.create_bind_group_layout(
+                            &wgpu::BindGroupLayoutDescriptor {
                                 entries: &[wgpu::BindGroupLayoutEntry {
                                     binding: 0,
                                     visibility: wgpu::ShaderStages::VERTEX,
@@ -270,13 +272,15 @@ impl Render {
                                     count: None,
                                 }],
                                 label: Some("camera_bind_group_layout"),
-                            });
+                            },
+                        );
                         let render_pipeline_layout =
-                            self.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                                label: Some("Render Pipeline Layout"),
-                                bind_group_layouts: &[&camera_bind_group_layout],
-                                push_constant_ranges: &[],
-                            });
+                            self.device
+                                .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                                    label: Some("Render Pipeline Layout"),
+                                    bind_group_layouts: &[&camera_bind_group_layout],
+                                    push_constant_ranges: &[],
+                                });
                         let shader = wgpu::ShaderModuleDescriptor {
                             label: Some("Shader"),
                             source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
