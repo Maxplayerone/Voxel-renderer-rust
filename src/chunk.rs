@@ -10,13 +10,13 @@ pub const VERTEX_PER_VOXEL: u64 = 36;
 pub const MAX_VERTEX_PER_CHUNK: u64 = VERTEX_PER_VOXEL * CHUNK_WIDTH * CHUNK_HEIGHT * CHUNK_DEPTH;
 pub const MAX_INDEX_COUNT_PER_CHUNK: u64 = MAX_VERTEX_PER_CHUNK;
 
-pub struct ChunkData {
+pub struct ChunkMeshData {
     vertices: Vec<Vertex>,
     indices: Vec<u32>,
     num_of_voxels: u32,
 }
 
-impl ChunkData {
+impl ChunkMeshData {
     pub fn new() -> Self {
         Self {
             vertices: Vec::new(),

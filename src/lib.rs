@@ -5,8 +5,8 @@ use winit::{
 };
 
 mod camera;
-mod render;
 mod chunk;
+mod render;
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
@@ -35,7 +35,6 @@ impl State {
         let projection =
             camera::Projection::new(render.width() / render.height(), 45.0, 0.1, 100.0);
 
-
         Self {
             camera,
             camera_controller,
@@ -55,7 +54,9 @@ impl State {
     }
 
     fn input(&mut self, event: &WindowEvent) -> bool {
-        self.camera_controller.process_events(event)
+        self.camera_controller.process_events(event);
+        self.render.process_events(event);
+        false
     }
 
     fn update(&mut self, dt: instant::Duration) {

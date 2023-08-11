@@ -1,7 +1,8 @@
 use std::iter;
 use wgpu::util::DeviceExt;
+use winit::event::{ElementState, KeyboardInput, VirtualKeyCode, WindowEvent};
 
-use crate::camera::{Projection, Camera};
+use crate::camera::{Camera, Projection};
 use crate::chunk;
 
 pub struct Render {
@@ -20,10 +21,10 @@ pub struct Render {
     camera_uniform: CameraUniform,
     camera_bind_group: wgpu::BindGroup,
 
-    chunk: chunk::ChunkData,
+    chunk: chunk::ChunkMeshData,
 }
 
-enum RenderingMode{
+enum RenderingMode {
     Fill,
     Wireframe,
 }
@@ -128,8 +129,7 @@ impl Render {
                 label: Some("Render Pipeline Layout"),
                 bind_group_layouts: &[&camera_bind_group_layout],
                 push_constant_ranges: &[],
-        });
-
+            });
 
         let shader = wgpu::ShaderModuleDescriptor {
             label: Some("Shader"),
@@ -137,7 +137,7 @@ impl Render {
         };
 
         let pipeline = create_render_pipeline(
-            &device,  
+            &device,
             &render_pipeline_layout,
             config.format,
             &[chunk::Vertex::desc()],
@@ -158,7 +158,7 @@ impl Render {
             mapped_at_creation: false,
         });
 
-        let mut chunk = chunk::ChunkData::new();
+        let mut chunk = chunk::ChunkMeshData::new();
         chunk.generate_mesh();
 
         Self {
@@ -179,7 +179,7 @@ impl Render {
         }
     }
 
-    pub fn window(&self) -> &winit::window::Window{
+    pub fn window(&self) -> &winit::window::Window {
         &self.window
     }
 
@@ -193,7 +193,7 @@ impl Render {
 
     //I prefer to have a method for that then to have a random
     //one public thing in the struct
-    pub fn get_size(&self) -> winit::dpi::PhysicalSize<u32>{
+    pub fn get_size(&self) -> winit::dpi::PhysicalSize<u32> {
         self.size
     }
 
@@ -208,9 +208,98 @@ impl Render {
         false
     }
 
-    pub fn update(&mut self, camera: &Camera, projection: &Projection){
-        self.camera_uniform
-            .update_view_proj(camera, projection);
+    pub fn process_events(&mut self, event: &WindowEvent) -> bool {
+        match event {
+            WindowEvent::KeyboardInput {
+                input:
+                    KeyboardInput {
+                        state,
+                        virtual_keycode: Some(keycode),
+                        ..
+                    },
+                ..
+            } => {
+                let is_pressed = *state == ElementState::Pressed;
+                match keycode {
+                    VirtualKeyCode::Key1 => {
+                        let camera_bind_group_layout =
+                            self.device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                                entries: &[wgpu::BindGroupLayoutEntry {
+                                    binding: 0,
+                                    visibility: wgpu::ShaderStages::VERTEX,
+                                    ty: wgpu::BindingType::Buffer {
+                                        ty: wgpu::BufferBindingType::Uniform,
+                                        has_dynamic_offset: false,
+                                        min_binding_size: None,
+                                    },
+                                    count: None,
+                                }],
+                                label: Some("camera_bind_group_layout"),
+                            });
+                        let render_pipeline_layout =
+                            self.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                                label: Some("Render Pipeline Layout"),
+                                bind_group_layouts: &[&camera_bind_group_layout],
+                                push_constant_ranges: &[],
+                            });
+                        let shader = wgpu::ShaderModuleDescriptor {
+                            label: Some("Shader"),
+                            source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
+                        };
+                        self.pipeline = create_render_pipeline(
+                            &self.device,
+                            &render_pipeline_layout,
+                            self.config.format,
+                            &[chunk::Vertex::desc()],
+                            shader,
+                            RenderingMode::Fill,
+                        );
+                        true
+                    }
+                    VirtualKeyCode::Key2 => {
+                        let camera_bind_group_layout =
+                            self.device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                                entries: &[wgpu::BindGroupLayoutEntry {
+                                    binding: 0,
+                                    visibility: wgpu::ShaderStages::VERTEX,
+                                    ty: wgpu::BindingType::Buffer {
+                                        ty: wgpu::BufferBindingType::Uniform,
+                                        has_dynamic_offset: false,
+                                        min_binding_size: None,
+                                    },
+                                    count: None,
+                                }],
+                                label: Some("camera_bind_group_layout"),
+                            });
+                        let render_pipeline_layout =
+                            self.device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                                label: Some("Render Pipeline Layout"),
+                                bind_group_layouts: &[&camera_bind_group_layout],
+                                push_constant_ranges: &[],
+                            });
+                        let shader = wgpu::ShaderModuleDescriptor {
+                            label: Some("Shader"),
+                            source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
+                        };
+                        self.pipeline = create_render_pipeline(
+                            &self.device,
+                            &render_pipeline_layout,
+                            self.config.format,
+                            &[chunk::Vertex::desc()],
+                            shader,
+                            RenderingMode::Wireframe,
+                        );
+                        true
+                    }
+                    _ => false,
+                }
+            }
+            _ => false,
+        }
+    }
+
+    pub fn update(&mut self, camera: &Camera, projection: &Projection) {
+        self.camera_uniform.update_view_proj(camera, projection);
         self.queue.write_buffer(
             &self.camera_buffer,
             0,
@@ -303,11 +392,10 @@ fn create_render_pipeline(
             front_face: wgpu::FrontFace::Ccw,
             cull_mode: Some(wgpu::Face::Back),
             // Setting this to anything other than Fill requires Features::NON_FILL_POLYGON_MODE
-            polygon_mode: 
-                match mode{
-                    RenderingMode::Fill => wgpu::PolygonMode::Fill,
-                    RenderingMode::Wireframe => wgpu::PolygonMode::Line,
-                },
+            polygon_mode: match mode {
+                RenderingMode::Fill => wgpu::PolygonMode::Fill,
+                RenderingMode::Wireframe => wgpu::PolygonMode::Line,
+            },
             // Requires Features::DEPTH_CLIP_CONTROL
             unclipped_depth: false,
             // Requires Features::CONSERVATIVE_RASTERIZATION
