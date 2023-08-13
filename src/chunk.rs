@@ -1,8 +1,8 @@
 use wgpu::util::{BufferInitDescriptor, DeviceExt};
 
-pub const CHUNK_WIDTH: usize = 4;
-pub const CHUNK_DEPTH: usize = 4;
-pub const CHUNK_HEIGHT: usize = 4;
+pub const CHUNK_WIDTH: usize = 16;
+pub const CHUNK_DEPTH: usize = 16;
+pub const CHUNK_HEIGHT: usize = 16;
 const BLOCK_SIZE: f32 = 1.0;
 
 const FRONT_COLOR: [f32; 3] = [0.4, 1.0, 0.52];
@@ -54,19 +54,37 @@ impl ChunkMeshData {
 
     pub fn generate_mesh(&mut self) {
         //generating at which position there is a voxel
-        for z in 0..CHUNK_WIDTH {
-            for x in 0..CHUNK_DEPTH {
-                for y in 0..CHUNK_HEIGHT {
+        for y in 0..CHUNK_HEIGHT {
+            for z in 0..CHUNK_DEPTH {
+                for x in y..CHUNK_WIDTH{
                     //println!("index {}", to_1d_array(x, z, y));
                     self.chunk_data[to_1d_array(x, y, z)] = 1;
                 }
             }
         }
-
         //generating mesh data for visible faces
-        for z in 0..CHUNK_DEPTH {
-            for x in 0..CHUNK_WIDTH {
-                for y in 0..CHUNK_HEIGHT {
+        /*
+        use noise::{NoiseFn, Perlin};
+        let perlin = Perlin::new(484);
+        for x in 0..100{
+            for z in 0..100{
+                let x = x as f64;
+                let z = z as f64;
+                let y = perlin.get([x, z]);
+                println!("x: {}, z: {},y: {}", x, z, y);
+            }
+        }
+        */
+        for y in 0..CHUNK_HEIGHT {
+            for z in 0..CHUNK_DEPTH {
+                for x in y..CHUNK_WIDTH  {
+                    /*
+                    let x_norm: f64 = x as f64 / CHUNK_WIDTH as f64;
+                    let z_norm: f64 = z as f64 / CHUNK_DEPTH as f64;
+                    let y_norm = perlin.get([x_norm, z_norm]);
+                    let y2: usize = (y_norm * CHUNK_HEIGHT as f64) as usize;
+                    println!("y2 {} y norm {}", y2, y_norm);
+                    */
                     //println!("x {} y {} z {}", x, y, z);
                     //println!("{}", to_1d_array(x + 1, y, z));
                     if z == CHUNK_DEPTH - 1 || self.chunk_data[to_1d_array(x, y, z + 1)] != 1{

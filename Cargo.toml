@@ -16,6 +16,7 @@ pollster = "0.3"
 wgpu = "0.17"
 winit = "0.28"
 instant = "0.1"
+noise = "0.8"
 
 [dependencies.image]
 version = "0.24"
