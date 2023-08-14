@@ -14,14 +14,12 @@ pub struct Render {
     window: winit::window::Window,
 
     pipeline: wgpu::RenderPipeline,
-    vertex_buffer: wgpu::Buffer,
-    index_buffer: wgpu::Buffer,
 
     camera_buffer: wgpu::Buffer,
     camera_uniform: CameraUniform,
     camera_bind_group: wgpu::BindGroup,
 
-    chunk: chunk::ChunkMeshData,
+    chunks: Vec<chunk::ChunkMeshData>,
 }
 
 enum RenderingMode {
@@ -145,21 +143,12 @@ impl Render {
             RenderingMode::Wireframe,
         );
 
-        let vertex_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Vertex Buffer"),
-            size: chunk::Vertex::size() * chunk::MAX_VERTEX_PER_CHUNK as u64,
-            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        let index_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Index Buffer"),
-            size: chunk::U32_SIZE * chunk::MAX_INDEX_COUNT_PER_CHUNK as u64,
-            usage: wgpu::BufferUsages::INDEX | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
-        let mut chunk = chunk::ChunkMeshData::new();
-        chunk.generate_mesh();
+        let mut chunks = Vec::new();
+        for x in 0..4 {
+            let mut chunk = chunk::ChunkMeshData::new(cgmath::Vector3::<usize>::new(16 * x, 0, 0));
+            chunk.generate_mesh();
+            chunks.push(chunk);
+        }
 
         Self {
             surface,
@@ -170,9 +159,7 @@ impl Render {
             window,
 
             pipeline,
-            vertex_buffer,
-            index_buffer,
-            chunk,
+            chunks,
             camera_buffer,
             camera_bind_group,
             camera_uniform,
@@ -323,10 +310,7 @@ impl Render {
                 label: Some("Render Encoder"),
             });
 
-        let (stg_vertex, stg_index, num_indices) = self.chunk.build(&self.device);
-        stg_vertex.copy_to_buffer(&mut encoder, &self.vertex_buffer);
-        stg_index.copy_to_buffer(&mut encoder, &self.index_buffer);
-
+        let (vertex_buffer, index_buffer, num_indices) = self.chunks[0].build(&self.device);
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),
@@ -348,14 +332,38 @@ impl Render {
 
             render_pass.set_pipeline(&self.pipeline);
             render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
-            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-            render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint32);
+            render_pass.set_vertex_buffer(0, vertex_buffer.buffer.slice(..));
+            render_pass.set_index_buffer(index_buffer.buffer.slice(..), wgpu::IndexFormat::Uint32);
             render_pass.draw_indexed(0..num_indices, 0, 0..1);
         }
+        let (vertex_buffer, index_buffer, num_indices) = self.chunks[1].build(&self.device);
+        {
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Render Pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: 0.1,
+                            g: 0.2,
+                            b: 0.3,
+                            a: 1.0,
+                        }),
+                        store: true,
+                    },
+                })],
+                depth_stencil_attachment: None,
+            });
 
+            render_pass.set_pipeline(&self.pipeline);
+            render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
+            render_pass.set_vertex_buffer(0, vertex_buffer.buffer.slice(..));
+            render_pass.set_index_buffer(index_buffer.buffer.slice(..), wgpu::IndexFormat::Uint32);
+            render_pass.draw_indexed(0..num_indices, 0, 0..1);
+        }
         self.queue.submit(iter::once(encoder.finish()));
         output.present();
-
         Ok(())
     }
 }

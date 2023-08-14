@@ -21,7 +21,8 @@ pub struct ChunkMeshData {
     vertices: Vec<Vertex>,
     indices: Vec<u32>,
     num_of_faces: u32,
-    chunk_data: Vec<u8>,
+    chunk_data: Vec<u8>, //storing local coordinates
+    world_coordinates: cgmath::Vector3<usize>,
 }
 
 //might be wrong (oopsies)
@@ -30,18 +31,25 @@ fn to_1d_array(x: usize, y: usize, z: usize) -> usize {
 }
 
 impl ChunkMeshData {
-    pub fn new() -> Self {
+    pub fn new(world_coordinates: cgmath::Vector3<usize>) -> Self {
         let chunk_data = vec![0; MAX_VOXEL_COUNT_PER_CHUNK];
         Self {
             vertices: Vec::new(),
             indices: Vec::new(),
             num_of_faces: 0,
             chunk_data,
+            world_coordinates,
         }
     }
 
     fn generate_mesh_face_data(&mut self, x: usize, y: usize, z: usize, face_type: FaceType) {
-        let vertex_face = generate_voxel_face(x as f32, y as f32, z as f32, face_type);
+        let vertex_face = generate_voxel_face(
+            x as f32,
+            y as f32,
+            z as f32,
+            &self.world_coordinates,
+            face_type,
+        );
         for vertex in vertex_face.iter() {
             self.vertices.push(*vertex);
         }
@@ -55,54 +63,32 @@ impl ChunkMeshData {
     pub fn generate_mesh(&mut self) {
         //generating at which position there is a voxel
         for y in 0..CHUNK_HEIGHT {
-            for z in 0..CHUNK_DEPTH {
-                for x in y..CHUNK_WIDTH{
-                    //println!("index {}", to_1d_array(x, z, y));
+            for z in y..CHUNK_DEPTH {
+                for x in 0..CHUNK_WIDTH {
                     self.chunk_data[to_1d_array(x, y, z)] = 1;
                 }
             }
         }
         //generating mesh data for visible faces
-        /*
-        use noise::{NoiseFn, Perlin};
-        let perlin = Perlin::new(484);
-        for x in 0..100{
-            for z in 0..100{
-                let x = x as f64;
-                let z = z as f64;
-                let y = perlin.get([x, z]);
-                println!("x: {}, z: {},y: {}", x, z, y);
-            }
-        }
-        */
         for y in 0..CHUNK_HEIGHT {
-            for z in 0..CHUNK_DEPTH {
-                for x in y..CHUNK_WIDTH  {
-                    /*
-                    let x_norm: f64 = x as f64 / CHUNK_WIDTH as f64;
-                    let z_norm: f64 = z as f64 / CHUNK_DEPTH as f64;
-                    let y_norm = perlin.get([x_norm, z_norm]);
-                    let y2: usize = (y_norm * CHUNK_HEIGHT as f64) as usize;
-                    println!("y2 {} y norm {}", y2, y_norm);
-                    */
-                    //println!("x {} y {} z {}", x, y, z);
-                    //println!("{}", to_1d_array(x + 1, y, z));
-                    if z == CHUNK_DEPTH - 1 || self.chunk_data[to_1d_array(x, y, z + 1)] != 1{
+            for z in y..CHUNK_DEPTH {
+                for x in 0..CHUNK_WIDTH {
+                    if z == CHUNK_DEPTH - 1 || self.chunk_data[to_1d_array(x, y, z + 1)] != 1 {
                         self.generate_mesh_face_data(x, y, z, FaceType::Front);
                     }
-                    if z == 0 || self.chunk_data[to_1d_array(x, y, z - 1)] != 1{
+                    if z == 0 || self.chunk_data[to_1d_array(x, y, z - 1)] != 1 {
                         self.generate_mesh_face_data(x, y, z, FaceType::Back);
                     }
-                    if x == CHUNK_WIDTH - 1 || self.chunk_data[to_1d_array(x + 1, y, z)] != 1{
+                    if x == CHUNK_WIDTH - 1 || self.chunk_data[to_1d_array(x + 1, y, z)] != 1 {
                         self.generate_mesh_face_data(x, y, z, FaceType::Right);
                     }
-                    if x == 0 || self.chunk_data[to_1d_array(x - 1, y, z)] != 1{
+                    if x == 0 || self.chunk_data[to_1d_array(x - 1, y, z)] != 1 {
                         self.generate_mesh_face_data(x, y, z, FaceType::Left);
                     }
-                    if y == CHUNK_HEIGHT - 1 || self.chunk_data[to_1d_array(x, y + 1, z)] != 1{
+                    if y == CHUNK_HEIGHT - 1 || self.chunk_data[to_1d_array(x, y + 1, z)] != 1 {
                         self.generate_mesh_face_data(x, y, z, FaceType::Top);
                     }
-                    if y == 0 || self.chunk_data[to_1d_array(x, y - 1, z)] != 1{
+                    if y == 0 || self.chunk_data[to_1d_array(x, y - 1, z)] != 1 {
                         self.generate_mesh_face_data(x, y, z, FaceType::Bottom);
                     }
                 }
@@ -120,7 +106,7 @@ impl ChunkMeshData {
 }
 
 pub struct StagingBuffer {
-    buffer: wgpu::Buffer,
+    pub buffer: wgpu::Buffer,
     size: wgpu::BufferAddress,
 }
 
@@ -171,7 +157,16 @@ enum FaceType {
     Bottom,
 }
 
-fn generate_voxel_face(x: f32, y: f32, z: f32, face_type: FaceType) -> [Vertex; 4] {
+fn generate_voxel_face(
+    x: f32,
+    y: f32,
+    z: f32,
+    world_coordinates: &cgmath::Vector3<usize>,
+    face_type: FaceType,
+) -> [Vertex; 4] {
+    let x = x + world_coordinates.x as f32;
+    //let world_x = world_coordinates.y;
+    //let world_z = world_coordinates.z;
     match face_type {
         FaceType::Front => {
             let v1 = Vertex {
