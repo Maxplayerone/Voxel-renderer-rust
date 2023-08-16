@@ -4,13 +4,6 @@ struct CameraUniform {
 @group(0) @binding(0)
 var<uniform> camera: CameraUniform;
 
-struct LightUniform{
-    position: vec3<f32>,
-    color: vec3<f32>,
-}
-@group(1) @binding(0)
-var<uniform> light: LightUniform;
-
 struct VertexInput {
     @location(0) position: vec3<f32>,
     @location(1) color: vec3<f32>,
@@ -33,6 +26,5 @@ fn vs_main(
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    let color = vec3<f32>(in.color.x * light.color.x, in.color.y * light.color.y, in.color.z * light.color.z);
-    return vec4<f32>(color, 1.0);
+    return vec4<f32>(in.color, 1.0);
 }

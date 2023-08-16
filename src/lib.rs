@@ -6,8 +6,8 @@ use winit::{
 
 mod camera;
 mod chunk;
-mod render;
 mod depth_texture;
+mod render;
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
@@ -23,11 +23,11 @@ impl State {
     async fn new(window: Window) -> Self {
         //positive Z points away from the screen
         let camera = camera::Camera {
-            camera_pos: (0.0, 0.0, 3.0).into(),
+            camera_pos: (0.0, 15.0, 1.0).into(),
             camera_front: (0.0, 0.0, -1.0).into(),
             speed: 5.0,
             angular_speed: 2.0,
-            yaw: -45.0,
+            yaw: 45.0,
             pitch: 0.0,
         };
         let render = render::Render::new(window).await;

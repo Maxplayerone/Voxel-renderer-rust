@@ -5,21 +5,21 @@ pub const CHUNK_DEPTH: usize = 16;
 pub const CHUNK_HEIGHT: usize = 16;
 const BLOCK_SIZE: f32 = 1.0;
 
-const FRONT_COLOR: [f32; 3] = [0.4, 1.0, 0.52];
+const FRONT_COLOR: [f32; 3] = [0.71, 1.0, 0.34];
+
+const BACK_COLOR: [f32; 3] = FRONT_COLOR;
+const RIGHT_COLOR: [f32; 3] = FRONT_COLOR;
+const LEFT_COLOR: [f32; 3] = FRONT_COLOR;
+const TOP_COLOR: [f32; 3] = FRONT_COLOR;
+const BOTTOM_COLOR: [f32; 3] = FRONT_COLOR;
 
 /*
-const BACK_COLOR: [f32; 3] = [0.4, 1.0, 0.52];
-const RIGHT_COLOR: [f32; 3] = [0.4, 1.0, 0.52];
-const LEFT_COLOR: [f32; 3] = [0.4, 1.0, 0.52];
-const TOP_COLOR: [f32; 3] = [0.4, 1.0, 0.52];
-const BOTTOM_COLOR: [f32; 3] = [0.4, 1.0, 0.52];
-*/
-
 const BACK_COLOR: [f32; 3] = [0.4, 1.0, 1.0];
 const RIGHT_COLOR: [f32; 3] = [1.0, 0.53, 0.43]; //orang
 const LEFT_COLOR: [f32; 3] = [0.82, 0.32, 1.0];
 const TOP_COLOR: [f32; 3] = [1.0, 1.0, 1.0];
 const BOTTOM_COLOR: [f32; 3] = [0.0, 0.0, 0.0];
+*/
 
 const MAX_VOXEL_COUNT_PER_CHUNK: usize = CHUNK_WIDTH * CHUNK_HEIGHT * CHUNK_DEPTH;
 //const VERTEX_PER_VOXEL: usize = 36;
@@ -80,7 +80,7 @@ impl ChunkMeshData {
         }
     }
 
-    pub fn generate_mesh(&mut self, _left_chunk_data: &Vec<u8>) -> u32 {
+    pub fn generate_mesh(&mut self) -> u32 {
         for y in 0..CHUNK_HEIGHT {
             for z in y..CHUNK_DEPTH {
                 for x in 0..CHUNK_WIDTH {
@@ -93,21 +93,8 @@ impl ChunkMeshData {
                     if x == CHUNK_WIDTH - 1 || self.chunk_data[to_1d_array(x + 1, y, z)] != 1 {
                         self.generate_mesh_face_data(x, y, z, FaceType::Right);
                     }
-                    //firstly checking neighbouring blocks in this chunk
-                    //(we have to have x == 0 so the second statement won't assert cuz x would be -1 in the argument to the function)
                     if x == 0 || self.chunk_data[to_1d_array(x - 1, y, z)] != 1 {
-                        /*
-                        //then checking neighbouring blocks in the neighbouring chunks
-                        let mut num = 0;
-                        if x == 0{
-                            let index = to_1d_array(CHUNK_WIDTH - 1, y, z);
-                            num = left_chunk_data[index];
-                        }
-                        //println!("num {}", num);
-                        if num != 1{
-                            */
                         self.generate_mesh_face_data(x, y, z, FaceType::Left);
-                        //}
                     }
                     if y == CHUNK_HEIGHT - 1 || self.chunk_data[to_1d_array(x, y + 1, z)] != 1 {
                         self.generate_mesh_face_data(x, y, z, FaceType::Top);
@@ -160,6 +147,61 @@ enum FaceType {
     Left,
     Top,
     Bottom,
+}
+
+pub fn generate_voxel(
+    device: &wgpu::Device,
+    x: f32,
+    y: f32,
+    z: f32,
+) -> (wgpu::Buffer, wgpu::Buffer) {
+    let mut vertices = Vec::new();
+    let mut indiceses = Vec::new();
+
+    for i in 0..6 {
+        let mut face = FaceType::Front;
+        if i == 1{
+            face = FaceType::Back;
+        }
+        else if i == 2{
+            face = FaceType::Right;
+        }
+        else if i == 3{
+            face = FaceType::Left;
+        }
+        else if i == 4{
+            face = FaceType::Bottom;
+        }
+        else if i == 5{
+            face = FaceType::Top;
+        }
+        let vertex_face = generate_voxel_face(
+            x as f32,
+            y as f32,
+            z as f32,
+            &cgmath::Vector3::<usize>::new(0, 0, 0),
+            face,
+        );
+        for vertex in vertex_face.iter() {
+            vertices.push(*vertex);
+        }
+        let indices = generate_index_for_face(i);
+        for index in indices.iter() {
+            indiceses.push(*index);
+        }
+    }
+
+    let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("Vertex buffer"),
+        contents: bytemuck::cast_slice(&vertices),
+        usage: wgpu::BufferUsages::VERTEX,
+    });
+    let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("index buffer"),
+        contents: bytemuck::cast_slice(&indiceses),
+        usage: wgpu::BufferUsages::INDEX,
+    });
+    (vertex_buffer, index_buffer)
 }
 
 fn generate_voxel_face(
