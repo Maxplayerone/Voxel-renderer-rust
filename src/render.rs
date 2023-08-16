@@ -4,6 +4,7 @@ use winit::event::{ElementState, KeyboardInput, VirtualKeyCode, WindowEvent};
 
 use crate::camera::{Camera, Projection};
 use crate::chunk;
+use crate::depth_texture;
 
 pub struct Render {
     surface: wgpu::Surface,
@@ -20,11 +21,43 @@ pub struct Render {
     camera_bind_group: wgpu::BindGroup,
 
     chunks: Vec<chunk::ChunkMeshData>,
+    depth_texture: depth_texture::DepthTexture,
 }
 
 enum RenderingMode {
     Fill,
     Wireframe,
+}
+
+enum Direction {
+    Left,
+    Right,
+    Top,
+    Bottom,
+}
+
+fn get_chunk(index: usize, width: usize, dir: Direction) -> Option<usize> {
+    match dir {
+        Direction::Left => {
+            let (x, z) = index_to_coords(index, width);
+            if x < 16 {
+                return None;
+            }
+            let index_left_chunk = coords_to_index(x - 16, z, width);
+            return Some(index_left_chunk);
+        }
+        _ => return None,
+    }
+}
+
+fn coords_to_index(x: usize, z: usize, width: usize) -> usize {
+    (z / 16 * width + x / 16).try_into().unwrap()
+}
+
+fn index_to_coords(index: usize, width: usize) -> (usize, usize) {
+    let x = (index % width as usize) * 16;
+    let z = (index / width as usize) * 16;
+    (x, z)
 }
 
 impl Render {
@@ -134,6 +167,8 @@ impl Render {
             source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
         };
 
+        let depth_texture = depth_texture::DepthTexture::create_depth_texture(&device, &config, "depth_texture");
+
         let pipeline = create_render_pipeline(
             &device,
             &render_pipeline_layout,
@@ -143,12 +178,26 @@ impl Render {
             RenderingMode::Wireframe,
         );
 
+
         let mut chunks = Vec::new();
-        for x in 0..4 {
-            let mut chunk = chunk::ChunkMeshData::new(cgmath::Vector3::<usize>::new(16 * x, 0, 0));
-            chunk.generate_mesh();
-            chunks.push(chunk);
+        let width = 4;
+        for z in 0..1 {
+            for x in 0..width {
+                let mut chunk =
+                    chunk::ChunkMeshData::new(cgmath::Vector3::<usize>::new(x * 16, 0, z * 16));
+                chunk.generate_data();
+                chunks.push(chunk);
+            }
         }
+        let mut total_faces: u32 = 0;
+        for i in 0..chunks.len() {
+            if let Some(left_chunk_index) = get_chunk(i, width, Direction::Left) {
+                let left_chunk_data = chunks[left_chunk_index].chunk_data.clone();
+                total_faces += chunks[i].generate_mesh(&left_chunk_data);
+            }
+            //chunk.generate_mesh(left_chunk_data, right_chunk_data, top_chunk_data, bottom_chunk_data);
+        }
+        println!("total faces {}", total_faces);
 
         Self {
             surface,
@@ -163,6 +212,7 @@ impl Render {
             camera_buffer,
             camera_bind_group,
             camera_uniform,
+            depth_texture,
         }
     }
 
@@ -190,6 +240,7 @@ impl Render {
             self.config.width = new_size.width;
             self.config.height = new_size.height;
             self.surface.configure(&self.device, &self.config);
+            self.depth_texture = depth_texture::DepthTexture::create_depth_texture(&self.device, &self.config, "depth texture");
             return true;
         }
         false
@@ -309,8 +360,16 @@ impl Render {
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("Render Encoder"),
             });
+        let mut vertex_buffers = Vec::new();
+        let mut index_buffers = Vec::new();
+        let mut indiceses = Vec::new();
+        for chunk in self.chunks.iter_mut() {
+            let (vertex_buffer, index_buffer, indices) = chunk.build(&self.device);
+            vertex_buffers.push(vertex_buffer);
+            index_buffers.push(index_buffer);
+            indiceses.push(indices);
+        }
 
-        let (vertex_buffer, index_buffer, num_indices) = self.chunks[0].build(&self.device);
         {
             let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Render Pass"),
@@ -327,41 +386,25 @@ impl Render {
                         store: true,
                     },
                 })],
-                depth_stencil_attachment: None,
-            });
-
-            render_pass.set_pipeline(&self.pipeline);
-            render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
-            render_pass.set_vertex_buffer(0, vertex_buffer.buffer.slice(..));
-            render_pass.set_index_buffer(index_buffer.buffer.slice(..), wgpu::IndexFormat::Uint32);
-            render_pass.draw_indexed(0..num_indices, 0, 0..1);
-        }
-        let (vertex_buffer, index_buffer, num_indices) = self.chunks[1].build(&self.device);
-        {
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("Render Pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.1,
-                            g: 0.2,
-                            b: 0.3,
-                            a: 1.0,
-                        }),
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment{
+                    view: &self.depth_texture.view,
+                    depth_ops: Some(wgpu::Operations{
+                        load: wgpu::LoadOp::Clear(1.0),
                         store: true,
-                    },
-                })],
-                depth_stencil_attachment: None,
+                    }),
+                    stencil_ops: None,
+                }),
             });
 
             render_pass.set_pipeline(&self.pipeline);
-            render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
-            render_pass.set_vertex_buffer(0, vertex_buffer.buffer.slice(..));
-            render_pass.set_index_buffer(index_buffer.buffer.slice(..), wgpu::IndexFormat::Uint32);
-            render_pass.draw_indexed(0..num_indices, 0, 0..1);
+            for i in 0..self.chunks.len() {
+                render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
+                render_pass.set_vertex_buffer(0, vertex_buffers[i].slice(..));
+                render_pass.set_index_buffer(index_buffers[i].slice(..), wgpu::IndexFormat::Uint32);
+                render_pass.draw_indexed(0..indiceses[i], 0, 0..1);
+            }
         }
+
         self.queue.submit(iter::once(encoder.finish()));
         output.present();
         Ok(())
@@ -413,7 +456,13 @@ fn create_render_pipeline(
             // Requires Features::CONSERVATIVE_RASTERIZATION
             conservative: false,
         },
-        depth_stencil: None,
+        depth_stencil: Some(wgpu::DepthStencilState{
+            format: depth_texture::DepthTexture::DEPTH_FORMAT,
+            depth_write_enabled: true,
+            depth_compare: wgpu::CompareFunction::Less,
+            stencil: wgpu::StencilState::default(),
+            bias: wgpu::DepthBiasState::default(),
+        }),
         multisample: wgpu::MultisampleState {
             count: 1,
             mask: !0,
