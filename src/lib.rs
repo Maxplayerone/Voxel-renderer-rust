@@ -8,6 +8,7 @@ mod camera;
 mod chunk;
 mod depth_texture;
 mod render;
+mod egui_integration;
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
@@ -137,6 +138,7 @@ pub async fn run() {
                 let dt = now - last_render_time;
                 last_render_time = now;
                 state.update(dt);
+                
                 match state.render.render() {
                     Ok(_) => {}
                     // Reconfigure the surface if it's lost or outdated

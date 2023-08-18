@@ -237,18 +237,22 @@ fn generate_voxel_face(
             let v1 = Vertex {
                 position: [x, y, z + BLOCK_SIZE],
                 color: color,
+                normal: [0.0, 0.0, 1.0],
             };
             let v2 = Vertex {
                 position: [x + BLOCK_SIZE, y, z + BLOCK_SIZE],
                 color: color,
+                normal: [0.0, 0.0, 1.0],
             };
             let v3 = Vertex {
                 position: [x, y + BLOCK_SIZE, z + BLOCK_SIZE],
                 color: color,
+                normal: [0.0, 0.0, 1.0],
             };
             let v4 = Vertex {
                 position: [x + BLOCK_SIZE, y + BLOCK_SIZE, z + BLOCK_SIZE],
                 color: color,
+                normal: [0.0, 0.0, 1.0],
             };
             [v1, v2, v3, v4]
         }
@@ -256,18 +260,22 @@ fn generate_voxel_face(
             let v1 = Vertex {
                 position: [x + BLOCK_SIZE, y, z],
                 color: color,
+                normal: [0.0, 0.0, -1.0],
             };
             let v2 = Vertex {
                 position: [x, y, z],
                 color: color,
+                normal: [0.0, 0.0, -1.0],
             };
             let v3 = Vertex {
                 position: [x + BLOCK_SIZE, y + BLOCK_SIZE, z],
                 color: color,
+                normal: [0.0, 0.0, -1.0],
             };
             let v4 = Vertex {
                 position: [x, y + BLOCK_SIZE, z],
                 color: color,
+                normal: [0.0, 0.0, -1.0],
             };
             [v1, v2, v3, v4]
         }
@@ -275,18 +283,22 @@ fn generate_voxel_face(
             let v1 = Vertex {
                 position: [x + BLOCK_SIZE, y, z + BLOCK_SIZE],
                 color: color,
+                normal: [1.0, 0.0, 0.0],
             };
             let v2 = Vertex {
                 position: [x + BLOCK_SIZE, y, z],
                 color: color,
+                normal: [1.0, 0.0, 0.0],
             };
             let v3 = Vertex {
                 position: [x + BLOCK_SIZE, y + BLOCK_SIZE, z + BLOCK_SIZE],
                 color: color,
+                normal: [1.0, 0.0, 0.0],
             };
             let v4 = Vertex {
                 position: [x + BLOCK_SIZE, y + BLOCK_SIZE, z],
                 color: color,
+                normal: [1.0, 0.0, 0.0],
             };
             [v1, v2, v3, v4]
         }
@@ -294,18 +306,22 @@ fn generate_voxel_face(
             let v1 = Vertex {
                 position: [x, y, z],
                 color: color,
+                normal: [-1.0, 0.0, 0.0],
             };
             let v2 = Vertex {
                 position: [x, y, z + BLOCK_SIZE],
                 color: color,
+                normal: [-1.0, 0.0, 0.0],
             };
             let v3 = Vertex {
                 position: [x, y + BLOCK_SIZE, z],
                 color: color,
+                normal: [-1.0, 0.0, 0.0],
             };
             let v4 = Vertex {
                 position: [x, y + BLOCK_SIZE, z + BLOCK_SIZE],
                 color: color,
+                normal: [-1.0, 0.0, 0.0],
             };
             [v1, v2, v3, v4]
         }
@@ -313,18 +329,22 @@ fn generate_voxel_face(
             let v1 = Vertex {
                 position: [x, y, z],
                 color: color,
+                normal: [0.0, -1.0, 0.0],
             };
             let v2 = Vertex {
                 position: [x + BLOCK_SIZE, y, z],
                 color: color,
+                normal: [0.0, -1.0, 0.0],
             };
             let v3 = Vertex {
                 position: [x, y, z + BLOCK_SIZE],
                 color: color,
+                normal: [0.0, -1.0, 0.0],
             };
             let v4 = Vertex {
                 position: [x + BLOCK_SIZE, y, z + BLOCK_SIZE],
                 color: color,
+                normal: [0.0, -1.0, 0.0],
             };
             [v1, v2, v3, v4]
         }
@@ -332,18 +352,22 @@ fn generate_voxel_face(
             let v1 = Vertex {
                 position: [x, y + BLOCK_SIZE, z + BLOCK_SIZE],
                 color: color,
+                normal: [0.0, 1.0, 0.0],
             };
             let v2 = Vertex {
                 position: [x + BLOCK_SIZE, y + BLOCK_SIZE, z + BLOCK_SIZE],
                 color: color,
+                normal: [0.0, 1.0, 0.0],
             };
             let v3 = Vertex {
                 position: [x, y + BLOCK_SIZE, z],
                 color: color,
+                normal: [0.0, 1.0, 0.0],
             };
             let v4 = Vertex {
                 position: [x + BLOCK_SIZE, y + BLOCK_SIZE, z],
                 color: color,
+                normal: [0.0, 1.0, 0.0],
             };
             [v1, v2, v3, v4]
         }
@@ -362,6 +386,7 @@ fn size_of_slice<T: Sized>(slice: &[T]) -> usize {
 pub struct Vertex {
     position: [f32; 3],
     color: [f32; 3],
+    normal: [f32; 3],
 }
 
 impl Vertex {
@@ -384,6 +409,11 @@ impl Vertex {
                 wgpu::VertexAttribute {
                     offset: mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
                     shader_location: 1,
+                    format: wgpu::VertexFormat::Float32x3,
+                },
+                wgpu::VertexAttribute{
+                    offset: mem::size_of::<[f32; 6]>() as wgpu::BufferAddress,
+                    shader_location: 2,
                     format: wgpu::VertexFormat::Float32x3,
                 },
             ],

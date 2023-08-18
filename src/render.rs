@@ -5,6 +5,7 @@ use winit::event::{ElementState, KeyboardInput, VirtualKeyCode, WindowEvent};
 use crate::camera::{Camera, Projection};
 use crate::chunk;
 use crate::depth_texture;
+use crate::egui_integration;
 
 pub struct Render {
     surface: wgpu::Surface,
@@ -110,6 +111,7 @@ impl Render {
         };
         surface.configure(&device, &config);
 
+
         let camera_uniform = CameraUniform::new();
 
         let camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -122,7 +124,7 @@ impl Render {
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 entries: &[wgpu::BindGroupLayoutEntry {
                     binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX,
+                    visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
                         has_dynamic_offset: false,
@@ -238,6 +240,17 @@ impl Render {
             }
         }
         println!("total faces {}", total_faces);
+
+        /*
+        let egui_routine = egui_integration::EguiRenderRoutine::new(
+            &device,
+            surface_format,
+            1,
+            size.width,
+            size.height,
+            window.scale_factor(),
+        );
+        */
 
         Self {
             surface,
@@ -421,6 +434,9 @@ impl Render {
             );
             render_pass.draw_indexed(0..36, 0, 0..1);
         }
+        {
+            
+        }
 
         self.queue.submit(iter::once(encoder.finish()));
         output.present();
@@ -494,6 +510,7 @@ fn create_render_pipeline(
 #[repr(C)]
 #[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 struct CameraUniform {
+    view_pos: [f32; 4],
     view_proj: [[f32; 4]; 4],
 }
 
@@ -511,10 +528,12 @@ impl CameraUniform {
         let view_proj = cgmath::Matrix4::identity();
         Self {
             view_proj: view_proj.into(),
+            view_pos: [0.0, 0.0, 0.0, 0.0],
         }
     }
 
     fn update_view_proj(&mut self, camera: &Camera, projection: &Projection) {
+        self.view_pos = camera.camera_pos.to_homogeneous().into();
         self.view_proj =
             (OPENGL_TO_WGPU_MATRIX * projection.get_projection() * camera.get_view()).into();
     }
